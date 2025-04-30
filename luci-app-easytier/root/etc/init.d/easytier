@@ -24,16 +24,16 @@ while true; do
                 online=""
                 for ip in $(uci -q get easytier.@easytier[0].checkip); do
                     ms=`echo $(ping -4 $ip -c 2 -w 4 -q) | awk -F '/' '{print $4}'`
-                    [ ! -z "$ms" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 通断检测：${ip} 延迟：${ms}ms " >>/tmp/easytier.log && online=1
-                    [ -z "$ms" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 通断检测：${ip} 网络中断 " >>/tmp/easytier.log
+                    [ ! -z "$ms" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Connectivity Check: ${ip} Latency: ${ms}ms " >>/tmp/easytier.log && online=1
+                    [ -z "$ms" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Connectivity Check: ${ip} Network Down " >>/tmp/easytier.log
                 done
-                [ "$online" != "1" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 通断检测：$(uci -q get easytier.@easytier[0].checkip) 所有指定IP皆无法ping通,重新启动程序！ " >>/tmp/easytier.log && /etc/init.d/easytier restart
+                [ "$online" != "1" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Connectivity Check: All specified IPs (${uci -q get easytier.@easytier[0].checkip}) are unreachable, restarting program! " >>/tmp/easytier.log && /etc/init.d/easytier restart
             fi
         else
-            echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 通断检测：检测到互联网未能成功访问，跳过检测 " >>/tmp/easytier.log
+            echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Connectivity Check: Internet connection not successful, skipping check " >>/tmp/easytier.log
         fi
     else
-        echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 通断检测：程序已关闭，退出检测 " >>/tmp/easytier.log
+        echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Connectivity Check: Program is disabled, exiting check " >>/tmp/easytier.log
         /etc/init.d/easytier restart
         break
     fi
@@ -68,31 +68,30 @@ check_bin() {
                 if [[ -f /tmp/easytier-core || -f /tmp/easytier-cli ]] && [[ "${path:0:4}" != "/tmp" ]]; then
                    chmod +x /tmp/easytier-core 2>/dev/null
                    chmod +x /tmp/easytier-cli 2>/dev/null
-		   mkdir -p "$path"
-                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 找到上传的程序/tmp/easytier-core，替换为$easytierbin " >>/tmp/easytier.log
+                   mkdir -p "$path"
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Found uploaded program /tmp/easytier-core, replacing with $easytierbin " >>/tmp/easytier.log
                    upsize="$(du -k /tmp/easytier-core | cut -f1)"
                    result=$(expr $size - $upsize)
-                   [ -z "$size"] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 获取可用空间失败，请使用ssh手动上传至 ${easytierbin} ${path}/easytier-cli" >>/tmp/easytier.log
+                   [ -z "$size" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Failed to get available space, please manually upload via ssh to ${easytierbin} ${path}/easytier-cli" >>/tmp/easytier.log
                    if [ "$(($(/tmp/easytier-core -h 2>&1 | wc -l)))" -gt 3 ] && [ "$result" -gt 1000 ] ; then
-                     mv -f /tmp/easytier-core "$easytierbin" 2>/dev/null
                      mv -f /tmp/easytier-cli "${path}/easytier-cli" 2>/dev/null
                      else
-		     if [ -z "$size" ] && [ "$(($(/tmp/easytier-core -h 2>&1 | wc -l)))" -gt 3 ] ; then
-			mv -f /tmp/easytier-core "$easytierbin" 2>/dev/null
-                     	mv -f /tmp/easytier-cli "${path}/easytier-cli" 2>/dev/null
-		     fi
-                     echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 无法替换，上传的程序不完整或自定义路径的可用空间不足，当前空间剩余${size}kb" >>/tmp/easytier.log
+                     if [ -z "$size" ] && [ "$(($(/tmp/easytier-core -h 2>&1 | wc -l)))" -gt 3 ] ; then
+                       mv -f /tmp/easytier-core "$easytierbin" 2>/dev/null
+                     mv -f /tmp/easytier-cli "${path}/easytier-cli" 2>/dev/null
+                     fi
+                     echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Unable to replace, uploaded program is incomplete or custom path has insufficient space, current available space ${size}kb" >>/tmp/easytier.log
                    fi
-                fi
-                if [ ! -f "$easytierbin" ] && [ "$size" -lt 5000 ] && [ ! -z "$size" ] ; then
-                    echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 自定义程序路径的可用空间不足，当前可用空间剩余${size}kb,自动切换为内存/tmp/easytier-core" >>/tmp/easytier.log
-                    sed -i "/easytierbin/c option easytierbin '/tmp/easytier-core' " /etc/config/easytier 
+                 fi
+                 if [ ! -f "$easytierbin" ] && [ "$size" -lt 5000 ] && [ ! -z "$size" ] ; then
+                     echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Custom program path has insufficient space, current available space ${size}kb, automatically switching to memory /tmp/easytier-core" >>/tmp/easytier.log
+                    sed -i "/easytierbin/c option easytierbin '/tmp/easytier-core' " /etc/config/easytier
                     easytierbin=/tmp/easytier-core
                 fi
 		if [ "$($easytierbin -h 2>&1 | wc -l)" -lt 3 ] || [ ! -f "$easytierbin" ] ; then
 		 curltest=`which curl`
 		 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-		 #github加速地址，一行一个 你可以自建改为你自己的
+			#GitHub mirror addresses, one per line You can set up your own and modify it here
 		 proxys="https://github.moeyy.xyz/
 			https://gh.llkk.cc/
 			https://mirror.ghproxy.com/
@@ -104,8 +103,8 @@ check_bin() {
        			tag="$( curl -k --connect-timeout 3 --user-agent "$user_agent"  https://api.github.com/repos/EasyTier/EasyTier/releases/latest  2>&1 | grep 'tag_name' | cut -d\" -f4 )"
        			[ -z "$tag" ] && tag="$( curl -Lk --connect-timeout 3 --user-agent "$user_agent" -s  https://api.github.com/repos/EasyTier/EasyTier/releases/latest  2>&1 | grep 'tag_name' | cut -d\" -f4 )"
    		 fi
-		 [ -z "$tag"] && tag=v2.2.4
-		 echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 未找到程序 $easytierbin 开始在线下载${tag}，下载较慢耐心等候" >>/tmp/easytier.log
+		 [ -z "$tag" ] && tag=v2.2.4
+			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Program $easytierbin not found, starting online download of ${tag}, please be patient as the download may take some time" >>/tmp/easytier.log
                  mkdir -p "$path"
 		for proxy in $proxys ; do
 	           curl -L -k -o /tmp/easytier.zip --connect-timeout 10 --retry 3 "${proxy}https://github.com/EasyTier/EasyTier/releases/download/${tag}/easytier-linux-${cpucore}-${tag}.zip" || wget --no-check-certificate --timeout=10 --tries=3 -O /tmp/easytier.zip "${proxy}https://github.com/EasyTier/EasyTier/releases/download/${tag}/easytier-linux-${cpucore}-${tag}.zip"
@@ -116,18 +115,18 @@ check_bin() {
 	         	mv -f /tmp/easytier-cli ${path}/
 	         	mv -f /tmp/easytier-web-embed ${path}/easytier-web || true
                  	chmod +x "$easytierbin"
-                	 rm -rf /tmp/easytier.zip 
+                	 rm -rf /tmp/easytier.zip
 			break
                  	if [ "$($easytierbin -h 2>&1 | wc -l)" -gt 3 ]; then
-                   		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : ${easytierbin} 下载成功" >>/tmp/easytier.log
+                  echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : ${easytierbin} downloaded successfully" >>/tmp/easytier.log
                  	else
                    	 	uci -q set easytier.@easytier[0].enabled=0
                     		uci commit easytier
-                    		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : https://github.com/EasyTier/EasyTier/releases/download/${tag}/easytier-linux-${cpucore}-${tag}.zip 下载失败，请手动下载上传程序,程序退出" >>/tmp/easytier.log
+                      echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Download failed https://github.com/EasyTier/EasyTier/releases/download/${tag}/easytier-linux-${cpucore}-${tag}.zip, please manually download and upload the program, exiting program" >>/tmp/easytier.log
                     		return 1
                  	fi
  		     else
-			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : https://github.com/EasyTier/EasyTier/releases/download/${tag}/easytier-linux-${cpucore}-${tag}.zip 下载失败，请手动下载上传程序,程序退出" >>/tmp/easytier.log
+        echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Failed to download https://github.com/EasyTier/EasyTier/releases/download/${tag}/easytier-linux-${cpucore}-${tag}.zip, please manually download and upload the program. Exiting program." >>/tmp/easytier.log
 		     fi
 		done
                 fi
@@ -151,14 +150,14 @@ check_config() {
                    v6tcp_port=$(cat $config_file |grep 'tcp://\[::\]:' | sed -n 's/.*:\([0-9]*\).*/\1/p')
                    v6udp_port=$(cat $config_file |grep 'udp://\[::\]:' | sed -n 's/.*:\([0-9]*\).*/\1/p')
                    v6wg_port=$(cat $config_file |grep 'wg://\[::\]:' | sed -n 's/.*:\([0-9]*\).*/\1/p')
-                              
+
                    procd_open_instance
 	           procd_set_param command "$easytierbin"
                    procd_append_param command -c "$config_file"
-		   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 运行 ${easytierbin} -c ${config_file}" >>/tmp/easytier.log
-			
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Running ${easytierbin} -c ${config_file}" >>/tmp/easytier.log
+
                    if [ ! -z "$udp_port" ] ; then
-		      echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_udp 放行UDP端口 ${udp_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_udp to allow UDP port ${udp_port} " >>/tmp/easytier.log
                       uci -q delete firewall.easytier_udp
 		      uci set firewall.easytier_udp=rule
 		      uci set firewall.easytier_udp.name="easytier_udp"
@@ -169,7 +168,7 @@ check_config() {
 		      uci set firewall.easytier_udp.enabled="1"
 	           fi
                    if [ ! -z "$wireguard_port" ] ; then
-		       echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_wireguard 放行UDP端口 ${wireguard_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_wireguard to allow UDP port ${wireguard_port} " >>/tmp/easytier.log
                        uci -q delete firewall.easytier_wireguard
 		       uci set firewall.easytier_wireguard=rule
 		       uci set firewall.easytier_wireguard.name="easytier_wireguard"
@@ -180,7 +179,7 @@ check_config() {
 		       uci set firewall.easytier_wireguard.enabled="1"
 	           fi
                    if [ ! -z "$v6tcp_port" ] ; then
-		     echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_v6tcp 放行TCP端口 ${v6tcp_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_v6tcp to allow TCP port ${v6tcp_port} " >>/tmp/easytier.log
                       uci -q delete firewall.easytier_v6tcp
 		      uci set firewall.easytier_v6tcp=rule
 		      uci set firewall.easytier_v6tcp.name="easytier_v6tcp"
@@ -191,7 +190,7 @@ check_config() {
 		      uci set firewall.easytier_v6tcp.enabled="1"
 	           fi
                    if [ ! -z "$v6udp_port" ] ; then
-		       echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_v6udp 放行UDP端口 ${v6udp_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_v6udp to allow UDP port ${v6udp_port} " >>/tmp/easytier.log
                        uci -q delete firewall.easytier_v6udp
 		       uci set firewall.easytier_v6udp=rule
 		       uci set firewall.easytier_v6udp.name="easytier_v6udp"
@@ -202,7 +201,7 @@ check_config() {
 		       uci set firewall.easytier_v6udp.enabled="1"
 	           fi
                    if [ ! -z "$v6ws_port" ] ; then
-		      echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_v6ws 放行TCP端口 ${v6ws_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_v6ws to allow TCP port ${v6ws_port} " >>/tmp/easytier.log
                       uci -q delete firewall.easytier_v6ws
 		      uci set firewall.easytier_v6ws=rule
 		      uci set firewall.easytier_v6ws.name="easytier_v6ws"
@@ -213,7 +212,7 @@ check_config() {
 		      uci set firewall.easytier_v6ws.enabled="1"
 	           fi
                    if [ ! -z "$v6wss_port" ] ; then
-		       echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_v6wss 放行TCP端口 ${v6wss_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_v6wss to allow TCP port ${v6wss_port} " >>/tmp/easytier.log
                        uci -q delete firewall.easytier_v6wss
 		       uci set firewall.easytier_v6wss=rule
 		       uci set firewall.easytier_v6wss.name="easytier_v6wss"
@@ -224,7 +223,7 @@ check_config() {
 		       uci set firewall.easytier_v6wss.enabled="1"
 	           fi
                    if [ ! -z "$v6wg_port" ] ; then
-		      echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_v6wg 放行UDP端口 ${v6wg_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_v6wg to allow UDP port ${v6wg_port} " >>/tmp/easytier.log
                       uci -q delete firewall.easytier_v6wg
 		      uci set firewall.easytier_v6wg=rule
 		      uci set firewall.easytier_v6wg.name="easytier_v6wg"
@@ -287,7 +286,7 @@ get_etconfig() {
 set_firewall() {
 		if [ "$listenermode" = "ON" ] || [ "$etcmd" = "web" ] ; then
 		if [ ! -z "$tcp_port" ] ; then
-		   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_tcp_udp 放行端口 ${tcp_port} " >>/tmp/easytier.log
+		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_tcp_udp to allow port ${tcp_port} " >>/tmp/easytier.log
                     uci -q delete firewall.easytier_tcp_udp
 		    uci set firewall.easytier_tcp_udp=rule
 		    uci set firewall.easytier_tcp_udp.name="easytier_tcp_udp"
@@ -298,7 +297,7 @@ set_firewall() {
 		    uci set firewall.easytier_tcp_udp.enabled="1"
 		 fi
                  if [ ! -z "$wss_port" ] ; then
-		   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_wss 放行端口 ${wss_port} " >>/tmp/easytier.log
+                 echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_wss to allow port ${wss_port} " >>/tmp/easytier.log
 		    uci -q delete firewall.easytier_wss
 		    uci set firewall.easytier_wss=rule
 		    uci set firewall.easytier_wss.name="easytier_wss"
@@ -309,7 +308,7 @@ set_firewall() {
 		    uci set firewall.easytier_wss.enabled="1"
 		 fi
                    if [ ! -z "$ws_port" ] ; then
-		    echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_ws 放行端口 ${ws_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_ws to allow port ${ws_port} " >>/tmp/easytier.log
 		    uci -q delete firewall.easytier_ws
 		    uci set firewall.easytier_ws=rule
 		    uci set firewall.easytier_ws.name="easytier_ws"
@@ -320,7 +319,7 @@ set_firewall() {
 		    uci set firewall.easytier_ws.enabled="1"
 		   fi
                    if [ ! -z "$wg_port" ] ; then
-		    echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_wg 放行端口 ${wg_port} " >>/tmp/easytier.log
+                   echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_wg to allow port ${wg_port} " >>/tmp/easytier.log
 		    uci -q delete firewall.easytier_wg
 		    uci set firewall.easytier_wg=rule
 		    uci set firewall.easytier_wg.name="easytier_wg"
@@ -333,7 +332,7 @@ set_firewall() {
                 fi
 		[ -z "$tunname" ] && tunname="tun0"
                 uci -q delete network.EasyTier >/dev/null 2>&1
-	        if [ -z "$(uci -q get network.EasyTier)" ];  then				
+	        if [ -z "$(uci -q get network.EasyTier)" ];  then
 			uci set network.EasyTier='interface'
                        if [ -z "$ipaddr" ]; then
 				uci set network.EasyTier.proto='none'
@@ -342,12 +341,12 @@ set_firewall() {
 				uci set network.EasyTier.ipaddr=$ipaddr
 				uci set network.EasyTier.netmask='255.0.0.0'
 			fi
-			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加网络接口 EasyTier 绑定虚拟接口 ${tunname}" >>/tmp/easytier.log
+			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding network interface EasyTier binding virtual interface ${tunname}" >>/tmp/easytier.log
                        uci set network.EasyTier.device="$tunname"
                        uci set network.EasyTier.ifname="$tunname"
 		fi
 		if [ -z "$(uci -q get firewall.easytierzone)" ];  then
-				echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则，放行网络接口 EasyTier 允许出入转发，开启IP动态伪装 MSS钳制" >>/tmp/easytier.log
+		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule to allow ingress/egress forwarding for network interface EasyTier and enabling IP masquerading MSS clamping" >>/tmp/easytier.log
 				uci set firewall.easytierzone='zone'
 				uci set firewall.easytierzone.input='ACCEPT'
 				uci set firewall.easytierzone.output='ACCEPT'
@@ -359,7 +358,7 @@ set_firewall() {
 		fi
 		et_forward="$(uci -q get easytier.@easytier[0].et_forward)"
 		if [ "${et_forward//etfwlan/}" != "$et_forward" ]; then
-			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 允许从虚拟网络 EasyTier 到局域网 lan 的流量" >>/tmp/easytier.log
+		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Allow traffic from virtual network EasyTier to LAN" >>/tmp/easytier.log
 			uci set firewall.easytierfwlan=forwarding
 			uci set firewall.easytierfwlan.dest='lan'
 			uci set firewall.easytierfwlan.src='EasyTier'
@@ -367,7 +366,7 @@ set_firewall() {
 			uci -q delete firewall.easytierfwlan
 		fi
 		if [ "${et_forward//etfwwan/}" != "$et_forward" ]; then
-			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 允许从虚拟网络 EasyTier 到广域网 wan 的流量" >>/tmp/easytier.log
+		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Allow traffic from virtual network EasyTier to WAN" >>/tmp/easytier.log
 			uci set firewall.easytierfwwan=forwarding
 			uci set firewall.easytierfwwan.dest='wan'
 			uci set firewall.easytierfwwan.src='EasyTier'
@@ -375,7 +374,7 @@ set_firewall() {
 			uci -q delete firewall.easytierfwwan
 		fi
                 if [ "${et_forward//lanfwet/}" != "$et_forward" ]; then
-			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 允许从局域网 lan 到虚拟网络 EasyTier 的流量" >>/tmp/easytier.log
+                echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Allow traffic from LAN to virtual network EasyTier" >>/tmp/easytier.log
 			uci set firewall.lanfweasytier=forwarding
 			uci set firewall.lanfweasytier.dest='EasyTier'
 			uci set firewall.lanfweasytier.src='lan'
@@ -383,7 +382,7 @@ set_firewall() {
 			uci -q delete firewall.lanfweasytier
 		fi
                 if [ "${et_forward//wanfwet/}" != "$et_forward" ]; then
-			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 允许从广域网 wan 到虚拟网络 EasyTier 的流量" >>/tmp/easytier.log
+                echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Allow traffic from WAN to virtual network EasyTier" >>/tmp/easytier.log
 			uci set firewall.wanfweasytier=forwarding
 			uci set firewall.wanfweasytier.dest='EasyTier'
 			uci set firewall.wanfweasytier.src='wan'
@@ -396,19 +395,19 @@ start_et() {
                 easytierbin="$(uci -q get easytier.@easytier[0].easytierbin)"
 		[ -z "$easytierbin" ] && easytierbin="/usr/bin/easytier-core" && uci -q set easytier.@easytier[0].easytierbin=/usr/bin/easytier-core
                 etcmd="$(uci -q get easytier.@easytier[0].etcmd)"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : easytier-core_${cpucore}开始启动" >>/tmp/easytier.log
-                [ ! -s /usr/lib/opkg/info/kmod-tun.list ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 缺少kmod-tun插件" >>/tmp/easytier.log
+                echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Starting easytier-core_${cpucore}" >>/tmp/easytier.log
+                [ ! -s /usr/lib/opkg/info/kmod-tun.list ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Missing kmod-tun module" >>/tmp/easytier.log
                 check_bin
-                chmod +x "$easytierbin" 
+                chmod +x "$easytierbin"
                 chmod +x ${path}/easytier-cli
                 ver="$($easytierbin -V | awk {'print $2'} | tr -d '~')"
-                [ ! -z "$ver" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : ${easytierbin}当前版本号-${ver} " >>/tmp/easytier.log
+                [ ! -z "$ver" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Current version of ${easytierbin} is ${ver}" >>/tmp/easytier.log
                 pgrep -f easytier_check | xargs kill -9 >/dev/null 2>&1
-		
+
                 ps | grep 'easytier-core' | grep -v grep | awk '{print $1}' | xargs kill >/dev/null 2>&1
                 ps | grep 'easytier-core' | grep -v grep | awk '{print $1}' | xargs kill -9 >/dev/null 2>&1
-          	if [ "$etcmd" = "config" ] ; then 
-                	check_config  
+          	if [ "$etcmd" = "config" ] ; then
+                	check_config
          	else
 			get_etconfig
 			procd_open_instance "easytier_core"
@@ -508,7 +507,7 @@ start_et() {
 				[ "$disable_ipv6" = "0" ] || procd_append_param command --disable-ipv6
 				[ "$latency_first" = "0" ] || procd_append_param command --latency-first
 				[ "$exit_node" = "0" ] || procd_append_param command --enable-exit-node
-				[ "$log" = "off" ] || procd_append_param command --file-log-level "$log" 
+				[ "$log" = "off" ] || procd_append_param command --file-log-level "$log"
 				[ "$log" = "off" ] || procd_append_param command --file-log-dir "/tmp"
 				[ "$log" = "off" ] && procd_append_param command --file-log-level "off"
               	  		[ "$disable_p2p" = "0" ] || procd_append_param command --disable-p2p
@@ -523,29 +522,29 @@ start_et() {
 				[ "$proxy_forward" = "0" ] || procd_append_param command --proxy-forward-by-system
 	     		fi
 			if [ "$etcmd" = "web" ] ; then
-				echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 运行 ${easytierbin} -w ${web_config}" >>/tmp/easytier.log
+			echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Running ${easytierbin} -w ${web_config}" >>/tmp/easytier.log
 				[ -f /etc/easytier/et_machine_id ] || touch /etc/easytier/et_machine_id
 				idpath=$(dirname "$easytierbin")
 				[ -f "${idpath}/et_machine_id" ] || ln -sf /etc/easytier/et_machine_id ${idpath}/et_machine_id
 				mkdir -p /var/lib/dbus
 				ln -sf /etc/easytier/et_machine_id /var/lib/dbus/machine-id
 				[ -z "$web_config" ] || procd_append_param command -w "$web_config"
-				[ "$log" = "off" ] || procd_append_param command --file-log-level "$log" 
+				[ "$log" = "off" ] || procd_append_param command --file-log-level "$log"
 				[ "$log" = "off" ] || procd_append_param command --file-log-dir "/tmp"
 			fi
-	     
+
         	fi
 		[ ! -z "$instance_name" ] && ln -sf /tmp/easytier-${instance_name}.${date_time}.log /tmp/easytier.log
-		
+
 		procd_set_param limits core="unlimited"
 		procd_set_param limits nofile="1000000 1000000"
 		procd_set_param stdout 1
 		procd_set_param stderr 1
 		procd_set_param respawn
 		procd_close_instance
-		
+
                 if [ ! -z "$socks_port" ] ; then
-		    echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_socks5 放行端口 ${socks_port} " >>/tmp/easytier.log
+                echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_socks5 to allow port ${socks_port} " >>/tmp/easytier.log
 		    uci -q delete firewall.easytier_socks5
 		    uci set firewall.easytier_socks5=rule
 		    uci set firewall.easytier_socks5.name="easytier_socks5"
@@ -562,15 +561,15 @@ start_et() {
                     		 wss_port="11012"
                     		 wg_port="11011"
                   	fi
-               		 set_firewall  
+               		 set_firewall
 		fi
-		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 重载防火墙和网络配置...会出现短暂断网现象... " >>/tmp/easytier.log
+		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Reloading firewall and network configuration... a brief disconnection may occur... " >>/tmp/easytier.log
                 [ -n "$(uci changes network)" ] && uci commit network && /etc/init.d/network reload >/dev/null 2>&1
 		[ -n "$(uci changes firewall)" ] && uci commit firewall && /etc/init.d/firewall reload >/dev/null 2>&1
 		[ -z "$proxy_network" ] || sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
                 [ ! -z "$checkip" ] && check
                 echo `date +%s` > /tmp/easytier_time
-		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 启动完成，若启动失败，请前往 状态 - 系统日志 找到easytier相关的字眼查看启动失败的原因 " >>/tmp/easytier.log
+                echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Startup completed. If startup fails, please check the System Log for related easytier entries to find the cause of failure." >>/tmp/easytier.log
 }
 
 start_log() {
@@ -582,13 +581,13 @@ start_log() {
 #!/bin/sh
 
 while true; do
- 
-sleep 120 
+
+sleep 120
 if [ "$(find /tmp -type f -name "easytier-*.*.log" -size +2000k -exec sh -c 'echo -n > {}; echo found' \;)" = "found" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : core日志文件超过2M 清空... " >/tmp/easytier.log
+echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Core log file exceeds 2M, clearing... " >/tmp/easytier.log
 fi
 if [ "$(find /tmp -type f -name "easytier.*.log" -size +2000k -exec sh -c 'echo -n > {}; echo found' \;)" = "found" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : web日志文件超过2M 清空... " >/tmp/easytierweb.log
+echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : web log file exceeds 2M, clearing... " >/tmp/easytierweb.log
 fi
 done
 EOF
@@ -606,17 +605,17 @@ fi
 start_web() {
 	webbin="$(uci -q get easytier.@easytier[0].webbin)"
 	if [ -f /tmp/easytier-web-embed ] ; then
-		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 找到上传的easytier-web程序，替换${webbin} " >>/tmp/easytierweb.log
+	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Found uploaded easytier-web program, replacing ${webbin} " >>/tmp/easytierweb.log
 		mv -f /tmp/easytier-web-embed "$webbin"
 	fi
 	if [ -f "$webbin" ] ; then
 		[ ! -x "$webbin" ] && chmod +x "$webbin"
 	fi
 	if [ ! -f "$webbin" ] || [ "$($webbin -h 2>&1 | wc -l)" -lt 3 ] ; then
-		echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 未找到${webbin}程序或程序不适配当前架构，请上传安装后再启动！ " >>/tmp/easytierweb.log
+	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : ${webbin} program not found or not compatible with the current architecture, please upload and install before starting! " >>/tmp/easytierweb.log
 		return 1
 	fi
-	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 开始启动${webbin} " >>/tmp/easytierweb.log
+	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Starting ${webbin} " >>/tmp/easytierweb.log
 	db_path="$(uci -q get easytier.@easytierweb[0].db_path)"
 	web_protocol="$(uci -q get easytier.@easytierweb[0].web_protocol)"
 	web_port="$(uci -q get easytier.@easytierweb[0].web_port)"
@@ -645,7 +644,7 @@ start_web() {
 	procd_set_param respawn
 	procd_close_instance
 	if [ ! -z "$web_port" ] ; then
-		      echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_web 放行服务端口 ${web_port} " >>/tmp/easytier.log
+	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_web to allow service port ${web_port} " >>/tmp/easytier.log
                       uci -q delete firewall.easytier_webserver
 		      uci set firewall.easytier_webserver=rule
 		      uci set firewall.easytier_webserver.name="easytier_webserver"
@@ -656,7 +655,7 @@ start_web() {
 		      uci set firewall.easytier_webserver.enabled="1"
 	fi
 	if [ ! -z "$api_port" ] ; then
-		      echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_web 放行API端口 ${api_port} " >>/tmp/easytier.log
+	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_web to allow API port ${api_port} " >>/tmp/easytier.log
                       uci -q delete firewall.easytier_webapi
 		      uci set firewall.easytier_webapi=rule
 		      uci set firewall.easytier_webapi.name="easytier_webapi"
@@ -667,7 +666,7 @@ start_web() {
 		      uci set firewall.easytier_webapi.enabled="1"
 	fi
 	if [ ! -z "$html_port" ] ; then
-		      echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 添加防火墙规则 easytier_web 放行html端口 ${html_port} " >>/tmp/easytier.log
+	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Adding firewall rule easytier_web to allow HTML port ${html_port} " >>/tmp/easytier.log
                       uci -q delete firewall.easytier_webhtml
 		      uci set firewall.easytier_webhtml=rule
 		      uci set firewall.easytier_webhtml.name="easytier_webhtml"
@@ -678,7 +677,7 @@ start_web() {
 		      uci set firewall.easytier_webhtml.enabled="1"
 	fi
 	echo `date +%s` > /tmp/easytierweb_time
-	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 启动完成，若启动失败，请前往 状态 - 系统日志 找到easytier相关的字眼查看启动失败的原因 " >>/tmp/easytierweb.log
+	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Startup complete. If startup fails, please check the system log for errors related to easytier." >>/tmp/easytierweb.log
 }
 
 start_service() {
@@ -700,27 +699,27 @@ start_service() {
 	touch /tmp/easytier.${date_time}.log
         ln -sf /tmp/easytier.${date_time}.log /tmp/easytierweb.log
 	cputype=$(uname -ms | tr ' ' '_' | tr '[A-Z]' '[a-z]')
-        [ -n "$(echo $cputype | grep -E "linux.*armv.*")" ] && cpucore="arm" 
-        [ -n "$(echo $cputype | grep -E "linux.*armv7.*")" ] && [ -n "$(cat /proc/cpuinfo | grep vfp)" ] && cpucore="armv7" 
-        [ -n "$(echo $cputype | grep -E "linux.*aarch64.*|linux.*armv8.*")" ] && cpucore="aarch64" 
-        [ -n "$(echo $cputype | grep -E "linux.*86.*")" ] && cpucore="i386" 
-        [ -n "$(echo $cputype | grep -E "linux.*86_64.*")" ] && cpucore="x86_64" 
+        [ -n "$(echo $cputype | grep -E "linux.*armv.*")" ] && cpucore="arm"
+        [ -n "$(echo $cputype | grep -E "linux.*armv7.*")" ] && [ -n "$(cat /proc/cpuinfo | grep vfp)" ] && cpucore="armv7"
+        [ -n "$(echo $cputype | grep -E "linux.*aarch64.*|linux.*armv8.*")" ] && cpucore="aarch64"
+        [ -n "$(echo $cputype | grep -E "linux.*86.*")" ] && cpucore="i386"
+        [ -n "$(echo $cputype | grep -E "linux.*86_64.*")" ] && cpucore="x86_64"
         if [ -n "$(echo $cputype | grep -E "linux.*mips.*")" ] ; then
-           mipstype=$(echo -n I | hexdump -o 2>/dev/null | awk '{ print substr($2,6,1); exit}') 
-           [ "$mipstype" = "0" ] && cpucore="mips" || cpucore="mipsel" 
+           mipstype=$(echo -n I | hexdump -o 2>/dev/null | awk '{ print substr($2,6,1); exit}')
+           [ "$mipstype" = "0" ] && cpucore="mips" || cpucore="mipsel"
         fi
         echo "" >/tmp/easytier.log
 	echo "" >/tmp/easytierweb.log
-        #test -z "`opkg list-installed|grep curl`" && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 缺少curl插件" >/tmp/easytier.log
-        #[ ! -s /usr/lib/opkg/info/unzip.list ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : 缺少unzip插件" >/tmp/easytier.log
-	[ "$(uci -q get easytier.@easytier[0].enabled)" = "1" ] && start_et easytier 
+	#test -z "`opkg list-installed|grep curl`" && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Missing curl program" >/tmp/easytier.log
+	#[ ! -s /usr/lib/opkg/info/unzip.list ] && echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : Missing unzip program" >/tmp/easytier.log
+	[ "$(uci -q get easytier.@easytier[0].enabled)" = "1" ] && start_et easytier
 	if [ -z "$(uci -q get easytier.@easytierweb[0].enabled)" ] ; then
 		echo "config easytierweb" >>/etc/config/easytier
 		echo "	option enabled '0'" >>/etc/config/easytier
 	fi
-	[ "$(uci -q get easytier.@easytierweb[0].enabled)" = "1" ] && start_web 
+	[ "$(uci -q get easytier.@easytierweb[0].enabled)" = "1" ] && start_web
 	start_log
-	
+
 }
 
 stop_service() {
@@ -748,22 +747,22 @@ stop_service() {
                 	uci -q delete firewall.easytier_v6wss >/dev/null 2>&1
                 	uci -q delete firewall.easytier_v6wg >/dev/null 2>&1
                 	[ -n "$(uci changes network)" ] && uci commit network && /etc/init.d/network reload >/dev/null 2>&1
-	        	[ -n "$(uci changes firewall)" ] && uci commit firewall && /etc/init.d/firewall reload >/dev/null 2>&1 
+	        	[ -n "$(uci changes firewall)" ] && uci commit firewall && /etc/init.d/firewall reload >/dev/null 2>&1
                 	rm -rf /tmp/easytier-cli_peer /tmp/easytier-cli_connector /tmp/easytier-cli_stun /tmp/easytier-cli_route >/dev/null 2>&1
                 	rm -rf /tmp/easytier-cli_peer-center /tmp/easytier-cli_vpn-portal /tmp/easytier_cmd /tmp/easytier-cli_node >/dev/null 2>&1
                 	rm -rf /tmp/easytier-*.* /tmp/easytier.log >/dev/null 2>&1
-                	echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : easytier-core 停止运行" >>/tmp/easytier.log
+                 echo "$(date '+%Y-%m-%d %H:%M:%S') easytier : easytier-core stopped running" >>/tmp/easytier.log
 		fi
 		if [ "$(uci -q get easytier.@easytierweb[0].enabled)" = "0" ] ; then
-                	ps | grep 'easytier-web' | grep -v grep | awk '{print $1}' | xargs kill >/dev/null 2>&1
-                	ps | grep 'easytier-web' | grep -v grep | awk '{print $1}' | xargs kill -9 >/dev/null 2>&1
+            ps | grep 'easytier-web' | grep -v grep | awk '{print $1}' | xargs kill >/dev/null 2>&1
+            ps | grep 'easytier-web' | grep -v grep | awk '{print $1}' | xargs kill -9 >/dev/null 2>&1
 			uci -q delete firewall.easytier_webserver
 			uci -q delete firewall.easytier_webapi
 			uci -q delete firewall.easytier_webhtml
 		fi
-		if  [ "$(uci -q get easytier.@easytier[0].enabled)" = "0" ] && [ "$(uci -q get easytier.@easytierweb[0].enabled)" = "0" ] ; then	
+		if  [ "$(uci -q get easytier.@easytier[0].enabled)" = "0" ] && [ "$(uci -q get easytier.@easytierweb[0].enabled)" = "0" ] ; then
 			pgrep -f easytier_checklog | xargs kill -9 >/dev/null 2>&1
-                	rm -rf /tmp/easytiernew.tag /tmp/easytier.tag >/dev/null 2>&1
+            rm -rf /tmp/easytiernew.tag /tmp/easytier.tag >/dev/null 2>&1
 		fi
 }
 
